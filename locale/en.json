@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Model, effort & refresh controls",
+    "description": "Splits the composer model control and provides configurable frontend refresh button and shortcut controls."
+  }
+}

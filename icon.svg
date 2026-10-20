@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Model and effort">
+  <rect x="8" y="12" width="30" height="16" rx="6" fill="#247bbf" opacity="0.18"/>
+  <rect x="8" y="12" width="30" height="16" rx="6" fill="none" stroke="#247bbf" stroke-width="2.5"/>
+  <rect x="26" y="36" width="30" height="16" rx="6" fill="#247bbf" opacity="0.18"/>
+  <rect x="26" y="36" width="30" height="16" rx="6" fill="none" stroke="#247bbf" stroke-width="2.5"/>
+  <circle cx="16" cy="20" r="2.6" fill="#247bbf"/>
+  <path d="M34 44h6M44 41v6M34 47h10" stroke="#247bbf" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,3 @@
+- insert:
+    - id: model-effort-control
+      name: '@local/dsh-model-effort-control'
