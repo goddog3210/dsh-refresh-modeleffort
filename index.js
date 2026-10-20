@@ -2,14 +2,23 @@
 // (`owner.effect(() => owner.webServer.register(route))`), so this entry must
 // also inject `webServer` or every activation fails with
 // `cannot get property "webServer" without inject`.
-export const inject = ['connection', 'webServer', 'configEditor'];
+export const inject = ['connection', 'webServer'];
+
+const RPC_CHANNEL = '/model-effort-control';
 
 // DSH installs this local linked plugin without its own dependency tree.
 // Keep the two boolean options dependency-free; the settings page validates
 // user input before it persists the profile configuration.
 
-function entryFor(ctx) {
-  return ctx.configEditor.entries().find((entry) => entry.options.id === 'model-effort-control');
+function entryFor(configEditor) {
+  return configEditor.entries().find((entry) => entry.options.id === 'model-effort-control');
+}
+
+function patchFrom(payload) {
+  return {
+    ...(typeof payload?.showRefreshButton === 'boolean' ? { showRefreshButton: payload.showRefreshButton } : {}),
+    ...(typeof payload?.enableRefreshShortcut === 'boolean' ? { enableRefreshShortcut: payload.enableRefreshShortcut } : {}),
+  };
 }
 
 export function apply(ctx, config = {}) {
@@ -20,20 +29,22 @@ export function apply(ctx, config = {}) {
     enableRefreshShortcut: config.enableRefreshShortcut !== false,
   };
 
-  // DSH binds `connection.rpc` to the context that reads it. Use a child context
-  // which explicitly owns both services, so the RPC route always has webServer.
-  ctx.inject(['connection', 'webServer'], (routeCtx) => routeCtx.connection.rpc.handle('/model-effort-control', async (endpoint, payload) => {
-    if (endpoint === 'settings') return { ok: true, value: settings };
+  // Route registration only depends on connection and webServer. configEditor
+  // is optional and required only when persisting a settings change; making it
+  // required here would leave even the read-only settings route unmounted.
+  return ctx.inject(['connection', 'webServer'], (scope) => scope.connection.rpc.handle(RPC_CHANNEL, async (endpoint, payload) => {
+    if (endpoint === 'settings') return { ok: true, value: { ...settings } };
     if (endpoint === 'update') {
-      const entry = entryFor(ctx);
-      if (!entry) throw new Error('Model Effort Control plugin entry is unavailable.');
-      const patch = {
-        ...(typeof payload?.showRefreshButton === 'boolean' ? { showRefreshButton: payload.showRefreshButton } : {}),
-        ...(typeof payload?.enableRefreshShortcut === 'boolean' ? { enableRefreshShortcut: payload.enableRefreshShortcut } : {}),
-      };
-      await ctx.configEditor.edit(entry, (current) => ({ ...current, ...patch }));
-      return { ok: true, value: { ...settings, ...patch } };
+      const configEditor = scope.get('configEditor');
+      if (!configEditor) return { ok: false, error: { message: '刷新控件插件配置不可用。' } };
+      const entry = entryFor(configEditor);
+      if (!entry) return { ok: false, error: { message: '刷新控件插件配置不可用。' } };
+      const patch = patchFrom(payload);
+      if (Object.keys(patch).length === 0) return { ok: false, error: { message: '没有可保存的设置项。' } };
+      await configEditor.edit(entry, (current) => ({ ...current, ...patch }));
+      Object.assign(settings, patch);
+      return { ok: true, value: { ...settings } };
     }
-    throw new Error(`Unknown Model Effort Control action: ${endpoint}`);
+    return { ok: false, error: { message: `未知的刷新控件操作：${endpoint}` } };
   }));
 }
