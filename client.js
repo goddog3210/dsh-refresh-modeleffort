@@ -14,10 +14,11 @@ window.__ModuleLoader__.load({
     // These frontend-only preferences are stored in this client's localStorage.
     // The module snapshot keeps the composer and shortcuts in sync with saves.
     const SETTINGS_STORAGE_KEY = 'dsh.model-effort-control.refresh.v1';
-    let refreshSettings = { showRefreshButton: true, enableRefreshShortcut: true };
+    let refreshSettings = { splitModelEffort: true, showRefreshButton: true, enableRefreshShortcut: true };
 
     function normalizeRefreshSettings(value) {
       return {
+        splitModelEffort: value?.splitModelEffort !== false,
         showRefreshButton: value?.showRefreshButton !== false,
         enableRefreshShortcut: value?.enableRefreshShortcut !== false,
       };
@@ -143,8 +144,15 @@ window.__ModuleLoader__.load({
 
     function findPaneDestination(menu, kind) {
       const terms = kind === 'model' ? MODEL_TERMS : EFFORT_TERMS;
-      const controls = Array.from(menu.querySelectorAll('button, [role="button"], [role="menuitem"]'));
-      return controls.find((control) => isEnabledControl(control) && includesTerm(accessibleText(control), terms)) || null;
+      const controls = Array.from(menu.querySelectorAll('button[role="menuitem"], [role="button"], [role="menuitem"]'));
+      const candidates = controls.filter((control) => {
+        if (!isEnabledControl(control)) return false;
+        // DSH's root pane gives each destination a separate cellLabel. Do not
+        // match model values like "GPT reasoning" as if they were an effort row.
+        const label = control.querySelector('[class*="cellLabel"]');
+        return includesTerm(label ? textOf(label) : (control.getAttribute('aria-label') || referencedText(control, 'aria-labelledby')), terms);
+      });
+      return candidates.length === 1 ? candidates[0] : null;
     }
 
     function restoreNativeFallback(trigger) {
@@ -250,25 +258,26 @@ window.__ModuleLoader__.load({
           if (fallbackModel !== null && fallbackModel !== parts.model) {
             trigger.removeAttribute(FALLBACK_MODEL_ATTR);
           }
-          const usingNativeFallback = trigger.hasAttribute(FALLBACK_MODEL_ATTR);
+          const usingNativeFallback = !settings.splitModelEffort || trigger.hasAttribute(FALLBACK_MODEL_ATTR);
           const rect = trigger.getBoundingClientRect();
           // Keep the model and effort controls at their native location. The
           // optional refresh button uses the space immediately to their left.
           const extraWidth = settings.showRefreshButton ? 30 : 0;
           overlay.style.left = (rect.left - extraWidth) + 'px';
           overlay.style.top = rect.top + 'px';
-          overlay.style.width = (rect.width + extraWidth) + 'px';
+          overlay.style.width = (usingNativeFallback ? extraWidth : rect.width + extraWidth) + 'px';
           overlay.style.height = rect.height + 'px';
-          overlay.style.display = !usingNativeFallback && rect.width > 0 && rect.height > 0 ? 'flex' : 'none';
+          overlay.style.display = rect.width > 0 && rect.height > 0 && (!usingNativeFallback || settings.showRefreshButton) ? 'flex' : 'none';
           refreshButton.style.display = settings.showRefreshButton ? '' : 'none';
 
+          const modelButton = overlay.querySelector('.' + CLASS + '_model');
+          const effortButton = overlay.querySelector('.' + CLASS + '_effort');
+          modelButton.style.display = usingNativeFallback ? 'none' : '';
+          effortButton.style.display = usingNativeFallback ? 'none' : '';
           if (usingNativeFallback) {
             trigger.removeAttribute(HIDDEN_ATTR);
             continue;
           }
-
-          const modelButton = overlay.querySelector('.' + CLASS + '_model');
-          const effortButton = overlay.querySelector('.' + CLASS + '_effort');
           if (modelButton.textContent !== parts.model) modelButton.textContent = parts.model;
           modelButton.title = '选择模型：' + parts.model;
           modelButton.setAttribute('aria-label', '选择模型，当前 ' + parts.model);
@@ -459,6 +468,7 @@ window.__ModuleLoader__.load({
             h('div', null, h('h1', null, '刷新控件'), h('p', null, '管理模型选择器旁的前端刷新按钮，以及 page.refresh 快捷键的刷新行为。'))),
           h('section', { className: 'mec-settings-card', 'aria-busy': busy },
             h('div', { className: 'mec-settings-card-head' }, h('h2', null, '前端刷新'), h('p', null, '这些选项只影响 DSH 前端，不会更改当前模型或供应商配置。')),
+            row('splitModelEffort', '分开显示模型与推理强度', '关闭后恢复 DSH 原生组合按钮，刷新按钮和快捷键仍可独立使用。'),
             row('showRefreshButton', '显示刷新按钮', '在模型选择器左侧显示 ↻，点击后重新加载 DSH 前端。'),
             row('enableRefreshShortcut', '启用刷新快捷键', '让 page.refresh（包括常见的 Ctrl+R）稳定刷新前端。')),
           h('p', { className: 'mec-settings-status' + (saveState === 'saved' ? ' is-saved' : ''), role: 'status', 'aria-live': 'polite' }, status),
